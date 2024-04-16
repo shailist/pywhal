@@ -1,0 +1,12 @@
+﻿{
+  "configurations": [
+    {
+      "name": "Existing Cache",
+      "cacheRoot": "${workspaceRoot}/build",
+      "inheritEnvironments": [
+        "msvc_x64"
+      ],
+      "cacheGenerationCommand": "cmd /c ${workspaceRoot}/build-dev.bat"
+    }
+  ]
+}

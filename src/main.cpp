@@ -1,14 +1,18 @@
 #include <pybind11/pybind11.h>
 
-int add(int i, int j) { return i + j; }
+int add(int i, int j)
+{
+    return i + j;
+}
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(_core, m) {
+PYBIND11_MODULE(_core, m)
+{
   m.doc() = R"pbdoc(
-      Pybind11 example plugin
+      pywhal - Python Windows HAcking Library
       -----------------------
-      .. currentmodule:: python_example
+      .. currentmodule:: pywhal
       .. autosummary::
          :toctree: _generate
          add
