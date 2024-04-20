@@ -5,75 +5,12 @@ from encodings import utf_8
 from typing import TypeAlias, Union
 
 
-if sys.platform == 'win32':
-    FRIENDLY_MODULE_NAME: TypeAlias = Union[bytes, str]
-    MODULE_NAME: TypeAlias = ctypes.wintypes.LPCSTR
-    MODULE_HANDLE: TypeAlias = ctypes.wintypes.HMODULE
-    FRIENDLY_SYMBOL_NAME: TypeAlias = Union[int, bytes, str]
-    SYMBOL_NAME: TypeAlias = ctypes.wintypes.LPCSTR
-    SYMBOL_ADDRESS: TypeAlias = ctypes.wintypes.LPVOID  # This should be a function pointer, but it isn't necessary
-    
-    GetProcAddress = ctypes.windll.kernel32.GetProcAddress
-    GetProcAddress.restype = SYMBOL_ADDRESS
-    GetProcAddress.argtypes = [ctypes.wintypes.HMODULE, SYMBOL_NAME]
-
-    GetModuleHandleA = ctypes.windll.kernel32.GetModuleHandleA
-    GetModuleHandleA.restype = ctypes.wintypes.HMODULE
-    GetModuleHandleA.argtypes = [ctypes.wintypes.LPCSTR]
-
-    LoadLibraryA = ctypes.windll.kernel32.LoadLibraryA
-    LoadLibraryA.restype = ctypes.wintypes.HMODULE
-    LoadLibraryA.argtypes = [ctypes.wintypes.LPCSTR]
-
-    FreeLibrary = ctypes.windll.kernel32.FreeLibrary
-    FreeLibrary.restype = ctypes.wintypes.BOOL
-    FreeLibrary.argtypes = [ctypes.wintypes.HMODULE]
-
-
-    def _parse_symbol_name(symbol_name: FRIENDLY_SYMBOL_NAME) -> SYMBOL_NAME:
-        if isinstance(symbol_name, str):
-            symbol_name = utf_8.encode(symbol_name)[0]
-
-        return SYMBOL_NAME(symbol_name)
-
-
-    def _get_symbol(module_handle: MODULE_HANDLE, symbol_name: SYMBOL_NAME) -> SYMBOL_ADDRESS:
-        symbol_address = GetProcAddress(module_handle, symbol_name)
-        if not symbol_address:
-            raise WindowsError(f'Could not get the address of the symbol \'{module_name}\'.')
-
-        return symbol_address
-
-
-    def _parse_module_name(module_name: FRIENDLY_MODULE_NAME) -> MODULE_NAME:
-        if isinstance(module_name, str):
-            module_name = utf_8.encode(module_name)[0]
-
-        return MODULE_NAME(module_name)
-    
-
-    def _get_module(module_name: MODULE_NAME) -> MODULE_HANDLE:
-        module_handle = GetModuleHandleA(module_name)
-        if module_handle == 0:
-            raise WindowsError(f'Could not find module \'{module_name}\'.')
-
-        return module_handle
-
-
-    def _load_module(module_name: MODULE_NAME) -> MODULE_HANDLE:
-        module_handle = LoadLibraryA(module_name)
-        if not module_handle:
-            raise WindowsError(f'Could not load module \'{module_name}\'.')
-
-        return module_handle
-
-
-    def _unload_module(module_handle: MODULE_HANDLE) -> None:
-        FreeLibrary(module_handle)
-
-
-else:
-    raise NotImplementedError(f'Modules are not implemented for the \'{sys.platform}\' platform.')
+FRIENDLY_MODULE_NAME: TypeAlias = Union[bytes, str]
+MODULE_NAME: TypeAlias = ctypes.wintypes.LPCSTR
+MODULE_HANDLE: TypeAlias = ctypes.wintypes.HMODULE
+FRIENDLY_SYMBOL_NAME: TypeAlias = Union[int, bytes, str]
+SYMBOL_NAME: TypeAlias = ctypes.wintypes.LPCSTR
+SYMBOL_ADDRESS: TypeAlias = ctypes.wintypes.LPVOID  # This should be a function pointer, but it isn't necessary
 
 
 class Module:
@@ -133,3 +70,61 @@ class Modules(metaclass=ModulesMeta):
             module = module._module_handle
 
         _unload_module(module)
+
+
+GetProcAddress = ctypes.windll.kernel32.GetProcAddress
+GetProcAddress.restype = SYMBOL_ADDRESS
+GetProcAddress.argtypes = [ctypes.wintypes.HMODULE, SYMBOL_NAME]
+
+GetModuleHandleA = ctypes.windll.kernel32.GetModuleHandleA
+GetModuleHandleA.restype = ctypes.wintypes.HMODULE
+GetModuleHandleA.argtypes = [ctypes.wintypes.LPCSTR]
+
+LoadLibraryA = ctypes.windll.kernel32.LoadLibraryA
+LoadLibraryA.restype = ctypes.wintypes.HMODULE
+LoadLibraryA.argtypes = [ctypes.wintypes.LPCSTR]
+
+FreeLibrary = ctypes.windll.kernel32.FreeLibrary
+FreeLibrary.restype = ctypes.wintypes.BOOL
+FreeLibrary.argtypes = [ctypes.wintypes.HMODULE]
+
+def _parse_symbol_name(symbol_name: FRIENDLY_SYMBOL_NAME) -> SYMBOL_NAME:
+    if isinstance(symbol_name, str):
+        symbol_name = utf_8.encode(symbol_name)[0]
+
+    return SYMBOL_NAME(symbol_name)
+
+
+def _get_symbol(module_handle: MODULE_HANDLE, symbol_name: SYMBOL_NAME) -> SYMBOL_ADDRESS:
+    symbol_address = GetProcAddress(module_handle, symbol_name)
+    if not symbol_address:
+        raise WindowsError(f'Could not get the address of the symbol \'{module_name}\'.')
+
+    return symbol_address
+
+
+def _parse_module_name(module_name: FRIENDLY_MODULE_NAME) -> MODULE_NAME:
+    if isinstance(module_name, str):
+        module_name = utf_8.encode(module_name)[0]
+
+    return MODULE_NAME(module_name)
+    
+
+def _get_module(module_name: MODULE_NAME) -> MODULE_HANDLE:
+    module_handle = GetModuleHandleA(module_name)
+    if module_handle == 0:
+        raise WindowsError(f'Could not find module \'{module_name}\'.')
+
+    return module_handle
+
+
+def _load_module(module_name: MODULE_NAME) -> MODULE_HANDLE:
+    module_handle = LoadLibraryA(module_name)
+    if not module_handle:
+        raise WindowsError(f'Could not load module \'{module_name}\'.')
+
+    return module_handle
+
+
+def _unload_module(module_handle: MODULE_HANDLE) -> None:
+    FreeLibrary(module_handle)
