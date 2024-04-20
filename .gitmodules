@@ -1,3 +1,3 @@
-[submodule "deps/Detours/Detours"]
-	path = deps/Detours/Detours
+[submodule "src/cpp/deps/Detours/Detours"]
+	path = src/cpp/deps/Detours/Detours
 	url = https://github.com/microsoft/Detours.git

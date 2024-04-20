@@ -4,10 +4,9 @@ project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
-add_subdirectory(deps/Detours)
 
-pybind11_add_module(_core MODULE src/main.cpp)
-target_link_libraries(_core PRIVATE libdetours)
-set_property(TARGET _core PROPERTY CXX_STANDARD 20)
+#pybind11_add_module(_core MODULE)
 
-install(TARGETS _core DESTINATION ${SKBUILD_PROJECT_NAME})
+add_subdirectory(src/cpp)
+
+install(TARGETS pywhalCore DESTINATION ${SKBUILD_PROJECT_NAME})
