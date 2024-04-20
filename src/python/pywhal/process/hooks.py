@@ -11,7 +11,10 @@ class Hooks:
     Class for managing hooks.
     Note that the class should not be instantiated - all of the
     methods are marked with @classmethod.
-    """    
+    """
+    def __new__(cls):
+        raise TypeError('The Hooks class cannot be instantiated.')
+    
     @staticmethod
     def attach(original_function: TFunction, detour_function: TFunction) -> TFunction:
         """

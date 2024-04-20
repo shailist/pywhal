@@ -50,7 +50,7 @@ class Memory(metaclass=MemoryMeta):
     methods are marked with @classmethod.
     """    
     def __new__(cls):
-        raise TypeError('The Memory class cannot be instantiated')
+        raise TypeError('The Memory class cannot be instantiated.')
 
     @classmethod
     def get_memory(cls, address_range: Union[int, slice]) -> ctypes.Array:

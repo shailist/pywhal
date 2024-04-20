@@ -2,32 +2,27 @@ import ctypes
 import ctypes.wintypes
 import os
 from encodings import utf_8
-from typing import Generator, TypeAlias, Union
-
-
-FRIENDLY_MODULE_NAME: TypeAlias = Union[bytes, str]
-MODULE_NAME: TypeAlias = ctypes.wintypes.LPCSTR
-MODULE_HANDLE: TypeAlias = ctypes.wintypes.HMODULE
-FRIENDLY_SYMBOL_NAME: TypeAlias = Union[int, bytes, str]
-SYMBOL_NAME: TypeAlias = ctypes.wintypes.LPCSTR
-SYMBOL_ADDRESS: TypeAlias = ctypes.wintypes.LPVOID  # This should be a function pointer, but it isn't necessary
+from typing import Generator, Optional, Union
+from .._internal.windows_definitions import *
 
 
 class Module:
-    def __init__(self, _module_handle: MODULE_HANDLE):
-        self._module_handle = _module_handle
-        self._module_path = None
-        self._module_name = None
+    def __init__(self, process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE,
+                 module_path: Optional[str] = None, module_name: Optional[str] = None):
+        self._process_handle = process_handle
+        self._module_handle = module_handle
+        self._module_path = module_path
+        self._module_name = module_name
 
-    def get_symbol(self, symbol_name: FRIENDLY_SYMBOL_NAME) -> int:
+    def get_symbol(self, symbol_name: Union[int, bytes, str]) -> int:
         symbol_name = _parse_symbol_name(symbol_name)
-        symbol_address = _get_symbol(self._module_handle, symbol_name)
+        symbol_address = _get_symbol(self._process_handle, self._module_handle, symbol_name)
         return int(symbol_address) if symbol_address else 0
 
     @property
     def path(self) -> str:
         if self._module_path is None:
-            module_name = _get_module_name(self._module_handle)
+            module_name = _get_module_name(self._process_handle, self._module_handle)
             self._module_path = utf_8.decode(module_name)[0]
         
         return self._module_path
@@ -47,9 +42,9 @@ class Module:
         return self
          
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        Modules.unload_module(self._module_handle)
+        _unload_module(self._process_handle, self._module_handle)
 
-    def __getitem__(self, symbol_name: FRIENDLY_SYMBOL_NAME) -> int:
+    def __getitem__(self, symbol_name: Union[int, bytes, str]) -> int:
         return self.get_symbol(symbol_name)
     
     def __repr__(self) -> str:
@@ -61,11 +56,11 @@ class ModulesMeta(type):
     Convenience metaclass to allow accessing Modules's functionality
     via square brackets syntax (Modules['kernel32']).
     """
-    def __getitem__(cls, module_name: str) -> bytes:
+    def __getitem__(cls, module_name: str) -> Module:
         return Modules.get_module(module_name)
     
-    def __iter__(self) -> Generator[Module, None, None]:
-        yield from _iterate_modules()
+    def __iter__(cls) -> Generator[Module, None, None]:
+        yield from Modules.iterate_modules()
 
 
 class Modules(metaclass=ModulesMeta):
@@ -75,150 +70,101 @@ class Modules(metaclass=ModulesMeta):
     methods are marked with @classmethod.
     """
     def __new__(cls):
-        raise TypeError('The Modules class cannot be instantiated')
+        raise TypeError('The Modules class cannot be instantiated.')
 
     @classmethod
-    def get_module(cls, module_name: FRIENDLY_MODULE_NAME) -> Module:
+    def get_module(cls, module_name: Union[bytes, str]) -> Module:
         module_name = _parse_module_name(module_name)
         return Module(_get_module(module_name))
 
     @classmethod
-    def load_module(cls, module_name: FRIENDLY_MODULE_NAME) -> Module:
+    def load_module(cls, module_name: Union[bytes, str]) -> Module:
         module_name = _parse_module_name(module_name)
-        return Module(_load_module(module_name))
+        return Module(CurrentProcess, _load_module(module_name))
 
     @classmethod
-    def unload_module(cls, module: Union[FRIENDLY_MODULE_NAME, Module, MODULE_HANDLE]) -> None:
-        if isinstance(module, FRIENDLY_MODULE_NAME):
+    def unload_module(cls, module: Union[Union[bytes, str], Module, ctypes.wintypes.HMODULE]) -> None:
+        if isinstance(module, Union[bytes, str]):
             module = cls.get_module(module)
         
         if isinstance(module, Module):
             module = module._module_handle
 
         _unload_module(module)
+    
+    @classmethod
+    def iterate_modules(cls, process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> Generator[Module, None, None]:
+        yield from _iterate_modules(process_handle)
 
 
-TH32CS_SNAPMODULE = 0x00000008
-ERROR_NO_MORE_FILES = 18
-ERROR_INSUFFICIENT_BUFFER = 122
-MAX_MODULE_NAME32 = 255
-MAX_PATH = 260
-
-MAX_LONG_PATH_LENGTH = 32767
-
-class MODULEENTRY32(ctypes.Structure):
-    _fields_ = [
-        ('dwSize', ctypes.wintypes.DWORD),
-        ('th32ModuleID', ctypes.wintypes.DWORD),
-        ('th32ProcessID', ctypes.wintypes.DWORD),
-        ('GlblcntUsage', ctypes.wintypes.DWORD),
-        ('ProccntUsage', ctypes.wintypes.DWORD),
-        ('modBaseAddr', ctypes.wintypes.PBYTE),
-        ('modBaseSize', ctypes.wintypes.DWORD ),
-        ('hModule', ctypes.wintypes.HMODULE),
-        ('szModule', ctypes.c_char * (MAX_MODULE_NAME32 + 1)),
-        ('szExePath', ctypes.c_char * MAX_PATH)
-    ]
-
-LPMODULEENTRY32 = ctypes.POINTER(MODULEENTRY32)
-
-GetProcAddress = ctypes.windll.kernel32.GetProcAddress
-GetProcAddress.restype = SYMBOL_ADDRESS
-GetProcAddress.argtypes = [ctypes.wintypes.HMODULE, SYMBOL_NAME]
-
-GetModuleHandleA = ctypes.windll.kernel32.GetModuleHandleA
-GetModuleHandleA.restype = ctypes.wintypes.HMODULE
-GetModuleHandleA.argtypes = [ctypes.wintypes.LPCSTR]
-
-GetModuleFileNameA = ctypes.windll.kernel32.GetModuleFileNameA
-GetModuleFileNameA.restype = ctypes.wintypes.DWORD
-GetModuleFileNameA.argtypes = [ctypes.wintypes.HMODULE, ctypes.wintypes.LPSTR, ctypes.wintypes.DWORD]
-
-LoadLibraryA = ctypes.windll.kernel32.LoadLibraryA
-LoadLibraryA.restype = ctypes.wintypes.HMODULE
-LoadLibraryA.argtypes = [ctypes.wintypes.LPCSTR]
-
-FreeLibrary = ctypes.windll.kernel32.FreeLibrary
-FreeLibrary.restype = ctypes.wintypes.BOOL
-FreeLibrary.argtypes = [ctypes.wintypes.HMODULE]
-
-CreateToolhelp32Snapshot = ctypes.windll.kernel32.CreateToolhelp32Snapshot
-CreateToolhelp32Snapshot.restype = ctypes.wintypes.HANDLE
-CreateToolhelp32Snapshot.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.DWORD]
-
-Module32First = ctypes.windll.kernel32.Module32First
-Module32First.restype = ctypes.wintypes.BOOL
-Module32First.argtypes = [ctypes.wintypes.HANDLE, LPMODULEENTRY32]
-
-Module32Next = ctypes.windll.kernel32.Module32Next
-Module32Next.restype = ctypes.wintypes.BOOL
-Module32Next.argtypes = [ctypes.wintypes.HANDLE, LPMODULEENTRY32]
-
-CloseHandle = ctypes.windll.kernel32.CloseHandle
-CloseHandle.restype = ctypes.wintypes.BOOL
-CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
-
-GetLastError = ctypes.windll.kernel32.GetLastError
-GetLastError.restype = ctypes.wintypes.DWORD
-GetLastError.argtypes = []
-
-
-def _parse_symbol_name(symbol_name: FRIENDLY_SYMBOL_NAME) -> SYMBOL_NAME:
+def _parse_symbol_name(symbol_name: Union[int, bytes, str]) -> ctypes.wintypes.LPCSTR:
     if isinstance(symbol_name, str):
         symbol_name = utf_8.encode(symbol_name)[0]
 
-    return SYMBOL_NAME(symbol_name)
+    return ctypes.wintypes.LPCSTR(symbol_name)
 
 
-def _get_symbol(module_handle: MODULE_HANDLE, symbol_name: SYMBOL_NAME) -> SYMBOL_ADDRESS:
+def _get_symbol(process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE, symbol_name: ctypes.wintypes.LPCSTR) -> FARPROC:
+    if GetProcessId(process_handle) != CurrentProcessId:
+        # TODO: Implement
+        raise NotImplementedError('Getting symbols from another processes is not supported')
+    
     symbol_address = GetProcAddress(module_handle, symbol_name)
     if not symbol_address:
         raise WindowsError(f'Could not get the address of the symbol \'{symbol_name}\'.')
 
-    return SYMBOL_ADDRESS(symbol_address)
+    return FARPROC(symbol_address)
 
 
-def _get_module_name(module_handle: MODULE_HANDLE) -> bytes:
+def _get_module_name(process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE) -> bytes:
     name_buffer = bytes(MAX_PATH)
     
-    while (name_length := GetModuleFileNameA(module_handle, name_buffer, len(name_buffer))) >= len(name_buffer):
+    while (name_length := GetModuleFileNameExA(process_handle, module_handle, name_buffer, len(name_buffer))) >= len(name_buffer):
         if GetLastError() != ERROR_INSUFFICIENT_BUFFER:
             raise WindowsError('Failed getting module name.')
         
         name_buffer = bytes(min(len(name_buffer) * 2, MAX_LONG_PATH_LENGTH))
     
+    if name_length == 0:
+        raise WindowsError('Failed getting module name.')
+    
     return name_buffer[:name_length]
 
 
-def _parse_module_name(module_name: FRIENDLY_MODULE_NAME) -> MODULE_NAME:
+def _parse_module_name(module_name: Union[bytes, str]) -> ctypes.wintypes.LPCSTR:
     if isinstance(module_name, str):
         module_name = utf_8.encode(module_name)[0]
 
-    return MODULE_NAME(module_name)
+    return ctypes.wintypes.LPCSTR(module_name)
     
 
-def _get_module(module_name: MODULE_NAME) -> MODULE_HANDLE:
+def _get_module(module_name: ctypes.wintypes.LPCSTR) -> ctypes.wintypes.HMODULE:
     module_handle = GetModuleHandleA(module_name)
     if module_handle == 0:
         raise WindowsError(f'Could not find module \'{module_name}\'.')
 
-    return MODULE_HANDLE(module_handle)
+    return ctypes.wintypes.HMODULE(module_handle)
 
 
-def _load_module(module_name: MODULE_NAME) -> MODULE_HANDLE:
+def _load_module(module_name: ctypes.wintypes.LPCSTR) -> ctypes.wintypes.HMODULE:
     module_handle = LoadLibraryA(module_name)
     if not module_handle:
         raise WindowsError(f'Could not load module \'{module_name}\'.')
 
-    return MODULE_HANDLE(module_handle)
+    return ctypes.wintypes.HMODULE(module_handle)
 
 
-def _unload_module(module_handle: MODULE_HANDLE) -> None:
+def _unload_module(process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE) -> None:
+    if GetProcessId(process_handle) != CurrentProcessId:
+        # TODO: Implement
+        raise NotImplementedError('Unloading modules from another processes is not supported')
+    
     FreeLibrary(module_handle)
 
 
-def _iterate_modules() -> Generator[Module, None, None]:
-    snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0)
+def _iterate_modules(process_handle: ctypes.wintypes.HANDLE) -> Generator[Module, None, None]:
+    pid = GetProcessId(process_handle)
+    snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid)
     if not snapshot:
         raise WindowsError('Could not create modules snapshot.')
     
@@ -231,10 +177,10 @@ def _iterate_modules() -> Generator[Module, None, None]:
         if not Module32First(snapshot, module_ptr):
             raise WindowsError('Could not get first module.')
         
-        yield Module(MODULE_HANDLE(module.hModule))
+        yield Module(process_handle, ctypes.wintypes.HMODULE(module.hModule), module_name=os.path.basename(utf_8.decode(module.szExePath)[0]))
         
         while Module32Next(snapshot, module_ptr):
-            yield Module(MODULE_HANDLE(module.hModule))
+            yield Module(process_handle, ctypes.wintypes.HMODULE(module.hModule), module_name=os.path.basename(utf_8.decode(module.szExePath)[0]))
         
         if GetLastError() != ERROR_NO_MORE_FILES:
             raise WindowsError('Could not get next module.')
