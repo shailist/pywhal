@@ -306,10 +306,6 @@ CreateRemoteThread.restype = ctypes.wintypes.HANDLE
 CreateRemoteThread.argtypes = [ctypes.wintypes.HANDLE, LPSECURITY_ATTRIBUTES, ctypes.c_size_t, LPTHREAD_START_ROUTINE, ctypes.wintypes.LPVOID,
                                ctypes.wintypes.DWORD, ctypes.wintypes.LPDWORD]
 
-GetProcAddress = ctypes.windll.kernel32.GetProcAddress
-GetProcAddress.restype = FARPROC
-GetProcAddress.argtypes = [ctypes.wintypes.HMODULE, ctypes.wintypes.LPCSTR]
-
 GetModuleHandleA = ctypes.windll.kernel32.GetModuleHandleA
 GetModuleHandleA.restype = ctypes.wintypes.HMODULE
 GetModuleHandleA.argtypes = [ctypes.wintypes.LPCSTR]

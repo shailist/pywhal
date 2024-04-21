@@ -19,10 +19,8 @@ class Module:
         self._virtual_size = None
         self._exports = None
 
-    def get_symbol(self, symbol_name: Union[int, str]) -> int:
-        symbol_name = _parse_symbol_name(symbol_name)
-        symbol_address = _get_symbol(self._process_handle, self._module_handle, symbol_name)
-        return int(symbol_address) if symbol_address else 0
+    def get_export(self, export_name: Union[int, str]) -> int:
+        return self.exports[export_name]
 
     @property
     def path(self) -> str:
@@ -70,8 +68,8 @@ class Module:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         _unload_module(self._process_handle, self._module_handle)
 
-    def __getitem__(self, symbol_name: Union[int, str]) -> int:
-        return self.get_symbol(symbol_name)
+    def __getitem__(self, export_name: Union[int, str]) -> int:
+        return self.get_export(export_name)
     
     def __repr__(self) -> str:
         return f'<Module \'{self.name}\' @ {hex(self.address)}>'
@@ -127,25 +125,6 @@ class Modules(metaclass=ModulesMeta):
     @classmethod
     def iterate_modules(cls, process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> Generator[Module, None, None]:
         yield from _iterate_modules(process_handle)
-
-
-def _parse_symbol_name(symbol_name: Union[int, str]) -> ctypes.wintypes.LPCSTR:
-    if isinstance(symbol_name, str):
-        symbol_name = utf_8.encode(symbol_name)[0]
-
-    return ctypes.wintypes.LPCSTR(symbol_name)
-
-
-def _get_symbol(process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE, symbol_name: ctypes.wintypes.LPCSTR) -> FARPROC:
-    if GetProcessId(process_handle) != CurrentProcessId:
-        # TODO: Implement
-        raise NotImplementedError('Getting symbols from another processes is not supported')
-    
-    symbol_address = GetProcAddress(module_handle, symbol_name)
-    if not symbol_address:
-        raise WindowsError(f'Could not get the address of the symbol \'{symbol_name}\'.')
-
-    return FARPROC(symbol_address)
 
 
 def _get_module_name(process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE) -> bytes:
@@ -260,7 +239,7 @@ def _load_module(module_name: ctypes.wintypes.LPCSTR) -> ctypes.wintypes.HMODULE
 
 def _unload_module(process_handle: ctypes.wintypes.HANDLE, module_handle: ctypes.wintypes.HMODULE) -> None:
     if GetProcessId(process_handle) != CurrentProcessId:
-        # TODO: Implement
+        # TODO: Maybe implement? Doesn't seem really important
         raise NotImplementedError('Unloading modules from another processes is not supported')
     
     FreeLibrary(module_handle)
