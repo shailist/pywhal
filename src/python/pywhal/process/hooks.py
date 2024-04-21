@@ -71,4 +71,3 @@ def _detach_hook(trampoline_function: TFunction, detour_function: TFunction) -> 
     detour_function_address = ctypes.cast(detour_function, ctypes.c_void_p).value
     trampoline_function_address = _pywhalCore.hooks.attach_hook(trampoline_function_address, detour_function_address)
     return ctypes.cast(trampoline_function_address, ctypes_function_type)
-

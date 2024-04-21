@@ -2,7 +2,6 @@ import ctypes
 import os
 from encodings import utf_8
 from typing import Generator, Union, Optional
-from .modules import Module, _get_module
 from .._internal.windows_definitions import *
 
 
@@ -21,6 +20,7 @@ class Process:
         
         self._image_path = image_path
         self._image_name = image_name
+        self._is_32bit = None
 
     @property
     def pid(self) -> int:
@@ -42,6 +42,13 @@ class Process:
             self._image_name = os.path.basename(self.image_path)
         
         return self._image_name
+
+    @property
+    def is_32bit(self) -> bool:
+        if self._is_32bit is None:
+            self._is_32bit = _is_process_32bit(self.process_handle)
+        
+        return self._is_32bit
 
     @property
     def process_handle(self) -> ctypes.wintypes.HANDLE:
@@ -103,8 +110,18 @@ def _get_process_pid(process_handle: ctypes.wintypes.HANDLE) -> int:
     return pid
 
 def _get_process_image_path(process_handle: ctypes.wintypes.HANDLE) -> str:
+    from .modules import Module
+    
     executable_module = Module(process_handle, ctypes.wintypes.HMODULE(None))
     return executable_module.path
+
+
+def _is_process_32bit(process_handle: ctypes.wintypes.HANDLE) -> bool:
+    is_32bit = ctypes.wintypes.BOOL()
+    if not IsWow64Process(process_handle, ctypes.pointer(is_32bit)):
+        raise WindowsError('Could not determine if process is 32bit.')
+    
+    return bool(is_32bit)
 
 
 def _open_process(pid: int, desired_access: int) -> ctypes.wintypes.HANDLE:
@@ -139,4 +156,3 @@ def _iterate_processes() -> Generator[Process, None, None]:
         
     finally:
         CloseHandle(snapshot)
-
