@@ -1,7 +1,7 @@
 import ctypes
 import ctypes.wintypes
 from typing import Union
-from .process_handle import ProcessHandle
+from .implementation.process_handle_impl import ProcessHandle
 from .safe_handle import SafeHandle
 
 

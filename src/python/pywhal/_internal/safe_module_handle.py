@@ -10,3 +10,7 @@ class SafeModuleHandle(SafeResource):
     @property
     def handle(self) -> ctypes.wintypes.HMODULE:
         return self.resource
+    
+    @property
+    def address(self) -> int:
+        return self.handle.value or 0

@@ -1,6 +1,5 @@
-import ctypes
-from .. import _pywhalCore
 from typing import TypeVar
+from .._internal.implementation import hooks_impl
 
 
 TFunction = TypeVar('TFunction')
@@ -31,7 +30,7 @@ class Hooks:
         >>>
         >>> original_MessageBoxA = Hooks.attach(MessageBoxA, MessageBoxA_hook)
         """
-        return _attach_hook(original_function, detour_function)
+        return hooks_impl.attach_hook(original_function, detour_function)
 
 
     @staticmethod
@@ -52,22 +51,4 @@ class Hooks:
         >>> original_MessageBoxA = Hooks.attach(MessageBoxA, MessageBoxA_hook)
         >>> assert MessageBoxA == Hooks.detach(original_MessageBoxA, MessageBoxA_hook)
         """
-        return _detach_hook(trampoline_function, detour_function)
-
-
-def _attach_hook(original_function: TFunction, detour_function: TFunction) -> TFunction:
-    ctypes_function_type = type(original_function)
-        
-    original_function_address = ctypes.cast(original_function, ctypes.c_void_p).value
-    detour_function_address = ctypes.cast(detour_function, ctypes.c_void_p).value
-    trampoline_function_address = _pywhalCore.hooks.attach_hook(original_function_address, detour_function_address)
-    return ctypes.cast(trampoline_function_address, ctypes_function_type)
-
-
-def _detach_hook(trampoline_function: TFunction, detour_function: TFunction) -> TFunction:
-    ctypes_function_type = type(trampoline_function)
-        
-    trampoline_function_address = ctypes.cast(trampoline_function, ctypes.c_void_p).value
-    detour_function_address = ctypes.cast(detour_function, ctypes.c_void_p).value
-    trampoline_function_address = _pywhalCore.hooks.attach_hook(trampoline_function_address, detour_function_address)
-    return ctypes.cast(trampoline_function_address, ctypes_function_type)
+        return hooks_impl.detach_hook(trampoline_function, detour_function)

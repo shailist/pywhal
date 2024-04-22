@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Tuple, TypeVar
+from typing import Callable, Optional, Sequence, TypeVar
 
 
 TResource = TypeVar('TResource')
@@ -16,7 +16,7 @@ class SafeResource:
             resource (TResource): The resource to manage.
             deleter (Optional[Callable[[TResource], None]], optional):
                 The function that will be called with the managed resource in order to release it.
-                If the resource is a tuple, it will be unpacked in the function call.
+                If the resource is a sequence, it will be unpacked in the function call.
         """
         self.resource = resource
         self.deleter = deleter
@@ -29,7 +29,7 @@ class SafeResource:
 
     def release(self):
         if self.deleter is not None:
-            if isinstance(self.resource, Tuple):
+            if isinstance(self.resource, Sequence):
                 self.deleter(*self.resource)
             else:
                 self.deleter(self.resource)
