@@ -1,6 +1,8 @@
 import ctypes
 import ctypes.wintypes
 from typing import Union
+from .process_handle import ProcessHandle
+from .safe_handle import SafeHandle
 
 
 #############
@@ -30,7 +32,6 @@ PROCESS_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0xFFFF)
 
 MEM_COMMIT = 0x00001000
 MEM_RESERVE = 0x00002000
-MEM_DECOMMIT = 0x00004000  
 MEM_RELEASE = 0x00008000  
 
 PAGE_READWRITE = 0x04
@@ -41,6 +42,12 @@ HEAP_ZERO_MEMORY = 0x00000008
 
 IMAGE_NUMBEROF_DIRECTORY_ENTRIES = 16
 IMAGE_DIRECTORY_ENTRY_EXPORT = 0
+
+INFINITE = 0xFFFFFFFF
+
+WAIT_OBJECT_0 = 0x00000000
+WAIT_ABANDONED_0 = 0x00000080
+WAIT_TIMEOUT = 0x00000102
 
 
 #########
@@ -362,12 +369,16 @@ IsWow64Process = ctypes.windll.kernel32.IsWow64Process
 IsWow64Process.restype = ctypes.wintypes.BOOL
 IsWow64Process.argtypes = [ctypes.wintypes.HANDLE, ctypes.wintypes.PBOOL]
 
+WaitForMultipleObjects = ctypes.windll.kernel32.WaitForMultipleObjects
+WaitForMultipleObjects.restype = ctypes.wintypes.DWORD
+WaitForMultipleObjects.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.PHANDLE, ctypes.wintypes.BOOL, ctypes.wintypes.DWORD]
+
 
 #############
 # Variables #
 #############
 
-CurrentProcess = ctypes.wintypes.HANDLE(GetCurrentProcess())
 CurrentProcessId = GetCurrentProcessId()
+CurrentProcessHandle = ProcessHandle(ctypes.wintypes.HANDLE(GetCurrentProcess()), managed=False, pid=CurrentProcessId)
 
-ProcessHeap: ctypes.wintypes.HANDLE = ctypes.wintypes.HANDLE(GetProcessHeap())
+ProcessHeap = SafeHandle(ctypes.wintypes.HANDLE(GetProcessHeap()), managed=False)

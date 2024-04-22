@@ -2,13 +2,14 @@ import ctypes
 import os
 from encodings import utf_8
 from typing import Generator, Union, Optional
+from .._internal.process_handle import ProcessHandle, _open_process
 from .._internal.windows_definitions import *
 
 
 class Process:
     def __init__(self,
                  pid: Optional[int] = None,
-                 process_handle: Optional[ctypes.wintypes.HANDLE] = None,
+                 process_handle: Optional[ProcessHandle] = None,
                  desired_access: int = PROCESS_QUERY_INFORMATION,
                  image_path: Optional[str] = None,
                  image_name: Optional[str] = None):
@@ -25,14 +26,14 @@ class Process:
     @property
     def pid(self) -> int:
         if self._pid is None:
-            self._pid = _get_process_pid(self.process_handle)
+            self._pid = self.process_handle.pid
         
         return self._pid
 
     @property
     def image_path(self) -> str:
         if self._image_path is None:
-            self._image_path = _get_process_image_path(self.process_handle)
+            self._image_path = _get_process_image_path(self)
         
         return self._image_path
     
@@ -46,19 +47,29 @@ class Process:
     @property
     def is_32bit(self) -> bool:
         if self._is_32bit is None:
-            self._is_32bit = _is_process_32bit(self.process_handle)
+            self._is_32bit = _is_process_32bit(self)
         
         return self._is_32bit
 
     @property
-    def process_handle(self) -> ctypes.wintypes.HANDLE:
+    def process_handle(self) -> ProcessHandle:
         if self._process_handle is None:
             self._process_handle = _open_process(self.pid, self._desired_access)
         
         return self._process_handle
 
+    @property
+    def is_current_process(self) -> bool:
+        return self.pid == CurrentProcessId
+
+    def with_access(self, desired_access: int):
+        return _copy_process_with_access(self, desired_access)
+
     def __repr__(self) -> str:
         return f'<Process   {self.pid:>5} / 0x{self.pid:<4x}   \'{self.image_name}\'>'
+
+
+CurrentProcess = Process(CurrentProcessId, CurrentProcessHandle, PROCESS_ALL_ACCESS)
 
 
 class ProcessesMeta(type):
@@ -102,34 +113,19 @@ class Processes(metaclass=ProcessesMeta):
         return Process(process_handle=GetCurrentProcess())
 
 
-def _get_process_pid(process_handle: ctypes.wintypes.HANDLE) -> int:
-    pid = GetProcessId(process_handle)
-    if not pid:
-        raise WindowsError('Could not get process id.')
+def _get_process_image_path(process: Process) -> str:
+    from .modules import Module, SafeModuleHandle
     
-    return pid
-
-def _get_process_image_path(process_handle: ctypes.wintypes.HANDLE) -> str:
-    from .modules import Module
-    
-    executable_module = Module(process_handle, ctypes.wintypes.HMODULE(None))
+    executable_module = Module(process, SafeModuleHandle(ctypes.wintypes.HMODULE(None)))
     return executable_module.path
 
 
-def _is_process_32bit(process_handle: ctypes.wintypes.HANDLE) -> bool:
+def _is_process_32bit(process: Process) -> bool:
     is_32bit = ctypes.wintypes.BOOL()
-    if not IsWow64Process(process_handle, ctypes.pointer(is_32bit)):
+    if not IsWow64Process(process.process_handle.handle, ctypes.pointer(is_32bit)):
         raise WindowsError('Could not determine if process is 32bit.')
     
     return bool(is_32bit)
-
-
-def _open_process(pid: int, desired_access: int) -> ctypes.wintypes.HANDLE:
-    process_handle = OpenProcess(desired_access, False, pid)
-    if not process_handle:
-        raise WindowsError('Could not open process.')
-
-    return ctypes.wintypes.HANDLE(process_handle)
 
 
 def _iterate_processes() -> Generator[Process, None, None]:
@@ -138,21 +134,27 @@ def _iterate_processes() -> Generator[Process, None, None]:
         raise WindowsError('Could not create processes snapshot.')
     
     try:
-        process = PROCESSENTRY32()
-        process.dwSize = ctypes.sizeof(PROCESSENTRY32)
+        process_entry = PROCESSENTRY32()
+        process_entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
         
-        process_ptr = ctypes.pointer(process)
+        process_ptr = ctypes.pointer(process_entry)
         
         if not Process32First(snapshot, process_ptr):
             raise WindowsError('Could not get first process.')
         
-        yield Process(process.th32ProcessID, image_name=utf_8.decode(process.szExeFile)[0])
+        yield Process(process_entry.th32ProcessID, image_name=utf_8.decode(process_entry.szExeFile)[0])
         
         while Process32Next(snapshot, process_ptr):
-            yield Process(process.th32ProcessID, image_name=utf_8.decode(process.szExeFile)[0])
+            yield Process(process_entry.th32ProcessID, image_name=utf_8.decode(process_entry.szExeFile)[0])
         
         if GetLastError() != ERROR_NO_MORE_FILES:
             raise WindowsError('Could not get next process.')
         
     finally:
         CloseHandle(snapshot)
+
+def _copy_process_with_access(process: Process, desired_access: int):
+    if (process._desired_access & desired_access) != desired_access:
+        process = Process(process.pid, None, desired_access, process._image_path, process._image_name)
+    
+    return process

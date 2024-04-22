@@ -2,82 +2,64 @@ import ctypes
 import ctypes.wintypes
 import functools
 from typing import Callable, Optional, Union
+from .processes import Process, CurrentProcess
+from .._internal.safe_resource import SafeResource
 from .._internal.windows_definitions import *
 
 
-class MemoryBlock:
+class MemoryBlock(SafeResource):
     def __init__(self, address: int, size: int, deallocator: Optional[Callable[[int, int], None]] = None):
-        self.address = address
-        self.size = size
-        self.deallocator = deallocator
+        super().__init__((address, size), deallocator)
     
-    def detach(self):
-        """
-        The memory block won't be released when the object is destroyed.
-        """
-        self.deallocator = None
+    @property
+    def address(self):
+        return self.resource[0]
     
-    def __del__(self):
-        self._delete()
-    
-    def __enter__(self):
-        return self
-         
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._delete()
-    
-    def _delete(self):
-        if self.deallocator is not None:
-            self.deallocator(self.address, self.size)
-            self.deallocator = None
+    @property
+    def size(self):
+        return self.resource[1]
 
 
-class MemoryMeta(type):
+PROCESS_MEMORY_ACCESS = PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE
+
+
+class ProcessMemory:
     """
-    Convenience metaclass to allow accessing Memory's functionality
-    via square brackets syntax (Memory[0x1234] = 0xFF).
+    Class for accessing and manipulating the memory of a process.
     """
-    def __getitem__(cls, address_range: Union[int, slice]) -> bytes:
-        return cls.read(address_range)
-
-    def __setitem__(cls, address_range: Union[int, slice], data: bytes):
-        return cls.write(address_range, data)
-
-
-class Memory(metaclass=MemoryMeta):
-    """
-    Class for accessing and manipulating the memory of the process.
-    Note that the class should not be instantiated - all of the
-    methods are marked with @classmethod.
-    """    
-    def __new__(cls):
-        raise TypeError('The Memory class cannot be instantiated.')
-
-    @classmethod
-    def read(cls, address_range: Union[int, slice], process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> bytes:
+    def __init__(self, process: Process):
+        self._process = process.with_access(PROCESS_MEMORY_ACCESS)
+    
+    def read(self, address_range: Union[int, slice]) -> bytes:
         address_range = _normalize_address_range(address_range)
-        return _read_memory(process_handle, address_range)
+        return _read_memory(self._process, address_range)
 
-    @classmethod
-    def write(cls, address_range: Union[int, slice], data: bytes, process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> None:
+    def write(self, address_range: Union[int, slice], data: bytes) -> None:
         address_range = _normalize_address_range(address_range, len(data))
-        _write_memory(process_handle, address_range, data)
+        _write_memory(self._process, address_range, data)
     
-    @classmethod
-    def allocate(cls, size: int, executable: bool = False, process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> MemoryBlock:
-        return _allocate_memory(size, executable, process_handle)
+    def allocate(self, size: int, executable: bool = False) -> MemoryBlock:
+        return _allocate_memory(size, executable, self._process)
     
-    @classmethod
-    def read_null_terminated_array(cls, address: int, element_size: int, process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> bytes:
+    def read_null_terminated_array(self, address: int, element_size: int) -> bytes:
         """
         Reads an array that is terminated by a null entry.
         The array is of elements of size element_size.
         Returns the raw bytes of the array.
         """
-        return _read_null_terminated_array(address, element_size, process_handle)
+        return _read_null_terminated_array(self._process, address, element_size)
+    
+    def __getitem__(self, address_range: Union[int, slice]) -> bytes:
+        return self.read(address_range)
+
+    def __setitem__(self, address_range: Union[int, slice], data: bytes) -> None:
+        return self.write(address_range, data)
 
 
-_executable_heap: ctypes.wintypes.HANDLE = None
+CurrentProcessMemory = ProcessMemory(CurrentProcess)
+
+
+_executable_heap: SafeHandle = None
 
 
 def _normalize_address_range(address_range: Union[int, slice], size: int = 1) -> slice:
@@ -97,18 +79,18 @@ def _normalize_address_range(address_range: Union[int, slice], size: int = 1) ->
     return address_range
 
 
-def _read_memory(process_handle: ctypes.wintypes.HANDLE, address_range: slice) -> bytes:
+def _read_memory(process: Process, address_range: slice) -> bytes:
     size = address_range.stop - address_range.start
     data = bytes(size)
-    if not ReadProcessMemory(process_handle, address_range.start, data, size, None):
+    if not ReadProcessMemory(process.process_handle.handle, address_range.start, data, size, None):
         raise WindowsError('Could not read remote memory.')
     
     return data
 
 
-def _write_memory(process_handle: ctypes.wintypes.HANDLE, address_range: slice, data: bytes) -> None:
+def _write_memory(process: Process, address_range: slice, data: bytes) -> None:
     size = address_range.stop - address_range.start
-    if not WriteProcessMemory(process_handle, address_range.start, data, size, None):
+    if not WriteProcessMemory(process.process_handle.handle, address_range.start, data, size, None):
         raise WindowsError('Could not write remote memory.')
 
 
@@ -116,65 +98,67 @@ def _initialize_executable_heap():
     global _executable_heap
     
     if _executable_heap is None:
-        _executable_heap = HeapCreate(HEAP_CREATE_ENABLE_EXECUTE, 0, 0)
-        if not _executable_heap:
+        _executable_heap_handle = HeapCreate(HEAP_CREATE_ENABLE_EXECUTE, 0, 0)
+        if not _executable_heap_handle:
             raise WindowsError('Clound not create executable heap.')
         
-        _executable_heap = ctypes.wintypes.HANDLE(_executable_heap)
+        _executable_heap_handle = ctypes.wintypes.HANDLE(_executable_heap_handle)
+        _executable_heap = SafeHandle(_executable_heap_handle)
 
 
-def _allocate_memory(size: int, executable: bool = False, process_handle: ctypes.wintypes.HANDLE = CurrentProcess) -> MemoryBlock:
-    if process_handle == CurrentProcess:
+def _allocate_memory(size: int, executable: bool, process: Process) -> MemoryBlock:
+    if process.is_current_process:
         return _allocate_local_memory(size, executable)
     
     else:
-        return _allocate_remote_memory(size, executable, process_handle)
+        return _allocate_remote_memory(process, size, executable)
 
 
 def _allocate_local_memory(size: int, executable: bool) -> int:
     if executable:
         _initialize_executable_heap()
-        heap = _executable_heap
+        heap_handle = _executable_heap
     else:
-        heap = ProcessHeap
+        heap_handle = ProcessHeap
     
-    address = HeapAlloc(heap, HEAP_ZERO_MEMORY, size)
+    address = HeapAlloc(heap_handle.handle, HEAP_ZERO_MEMORY, size)
     if not address:
         raise WindowsError('Could not allocate memory.')
     
-    deallocator = functools.partial(_deallocate_local_memory, heap)
+    deallocator = functools.partial(_deallocate_local_memory, heap_handle)
     return MemoryBlock(address, size, deallocator)
     
 
-def _deallocate_local_memory(heap: ctypes.wintypes.HANDLE, address: int, size: int) -> None:
-    HeapFree(heap, 0, address)
+def _deallocate_local_memory(heap_handle: SafeHandle, address: int, size: int) -> None:
+    HeapFree(heap_handle.handle, 0, address)
 
 
-def _allocate_remote_memory(process_handle: ctypes.wintypes.HANDLE, size: int, executable: bool) -> MemoryBlock:
+def _allocate_remote_memory(process: Process, size: int, executable: bool) -> MemoryBlock:
     if executable:
         protection = PAGE_EXECUTE_READWRITE
     else:
         protection = PAGE_READWRITE
     
-    remote_address = VirtualAllocEx(process_handle, None, size, MEM_RESERVE | MEM_COMMIT, protection)
+    remote_address = VirtualAllocEx(process.process_handle.handle, None, size, MEM_RESERVE | MEM_COMMIT, protection)
     if not remote_address:
         raise WindowsError('Could not allocate remote memory.')
     
-    deallocator = functools.partial(_deallocate_remote_memory, process_handle)
+    deallocator = functools.partial(_deallocate_remote_memory, process)
     return MemoryBlock(remote_address, size, deallocator)
 
 
-def _deallocate_remote_memory(process_handle: ctypes.wintypes.HANDLE, address: int, size: int) -> None:
-    if not VirtualFreeEx(process_handle, address, 0, MEM_DECOMMIT | MEM_RELEASE):
+def _deallocate_remote_memory(process: Process, address: int, size: int) -> None:
+    if not VirtualFreeEx(process.process_handle.handle, address, 0, MEM_RELEASE):
+        print(GetLastError())
         raise WindowsError('Could not deallocate remote memory.')
 
 
-def _read_null_terminated_array(address: int, element_size: int, process_handle: ctypes.wintypes.HANDLE) -> bytes:
+def _read_null_terminated_array(process: Process, address: int, element_size: int) -> bytes:
     if element_size == 0:
         raise ValueError('Element size must be greater than 0.')
     
     data = b''
-    while (current_entry := _read_memory(process_handle, slice(address, address + element_size))).count(0) != element_size:
+    while (current_entry := _read_memory(process, slice(address, address + element_size))).count(0) != element_size:
         data += current_entry
         address += element_size
     
