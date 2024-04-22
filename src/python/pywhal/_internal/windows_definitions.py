@@ -373,6 +373,10 @@ WaitForMultipleObjects = ctypes.windll.kernel32.WaitForMultipleObjects
 WaitForMultipleObjects.restype = ctypes.wintypes.DWORD
 WaitForMultipleObjects.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.PHANDLE, ctypes.wintypes.BOOL, ctypes.wintypes.DWORD]
 
+GetExitCodeThread = ctypes.windll.kernel32.GetExitCodeThread
+GetExitCodeThread.restype = ctypes.wintypes.BOOL
+GetExitCodeThread.argtypes = [ctypes.wintypes.HANDLE, ctypes.wintypes.PDWORD]
+
 
 #############
 # Variables #
