@@ -1,9 +1,10 @@
 import ctypes.wintypes
 import functools
 from typing import Union
-from ..windows_definitions import *
-from ...library.memory_block import MemoryBlock
-from ...library.process import Process
+from .windows_definitions import *
+from ..memory_block import MemoryBlock
+from ..process import Process
+from ... import _pywhalCore
 
 
 PROCESS_MEMORY_ACCESS_RIGHTS = PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE
@@ -29,14 +30,12 @@ def normalize_address_range(address_range: Union[int, slice], size: int = 1) -> 
 
 
 def read_memory(process: Process, address_range: Union[int, slice]) -> bytes:
+    process = process.with_access(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)
+    
     address_range = normalize_address_range(address_range)
-    
     size = address_range.stop - address_range.start
-    data = bytes(size)
-    if not ReadProcessMemory(process.process_handle.handle, address_range.start, data, size, None):
-        raise WindowsError('Could not read remote memory.')
     
-    return data
+    return _pywhalCore.memory.read_process_memory(process.process_handle.handle.value, address_range.start, size)
 
 
 def write_memory(process: Process, address_range: Union[int, slice], data: bytes) -> None:
@@ -47,7 +46,7 @@ def write_memory(process: Process, address_range: Union[int, slice], data: bytes
         raise WindowsError('Could not write remote memory.')
 
 
-def initialize_executable_heap():
+def initialize_executable_heap() -> None:
     global _executable_heap
     
     if _executable_heap is None:

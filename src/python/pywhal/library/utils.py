@@ -1,9 +1,10 @@
 from typing import Sequence
+from .implementation import utils_impl
+from .implementation.safe_handle import SafeHandle
+from .implementation.windows_definitions import INFINITE
 from .process_modules import Module
 from .process import Process, CurrentProcess
-from .._internal.implementation import utils_impl
-from .._internal.safe_handle import SafeHandle
-from .._internal.windows_definitions import INFINITE
+from .. import rpyc_service
 
 
 class Utils:
@@ -40,12 +41,12 @@ class Utils:
         return utils_impl.wait_for_multiple_objects(handles, wait_all, timeout)
 
     @staticmethod
-    def inject_thread(start_address: int, parameter: int = 0, process: Process = CurrentProcess) -> int:
+    def inject_thread(start_address: int, parameter: int = 0, process: Process = CurrentProcess, wait: bool = True) -> int:
         """
         Creates a thread in the specified process and waits for it to finish.
         Returns the exit code of the thread.
         """
-        return utils_impl.inject_thread(process, start_address, parameter)
+        return utils_impl.inject_thread(process, start_address, parameter, wait)
 
     @staticmethod
     def inject_dll_into_process(process: Process, dll_path: str) -> Module:
@@ -55,8 +56,12 @@ class Utils:
         return utils_impl.inject_dll_into_process(process, dll_path)
     
     @staticmethod
-    def inject_python_into_process(process: Process, code: str) -> None:
+    def inject_python_into_process(process: Process, code: str, wait: bool = True) -> None:
         """
         Injects the Python interpreter into the given process and executes the given code.
         """
-        return utils_impl.inject_python_into_process(process, code)
+        return utils_impl.inject_python_into_process(process, code, wait)
+
+    @staticmethod
+    def inject_pywhal_into_process(process: Process) -> rpyc_service.API:
+        return utils_impl.inject_pywhal_into_process(process)

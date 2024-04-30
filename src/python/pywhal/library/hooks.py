@@ -1,5 +1,5 @@
 from typing import TypeVar
-from .._internal.implementation import hooks_impl
+from .implementation import hooks_impl
 
 
 TFunction = TypeVar('TFunction')

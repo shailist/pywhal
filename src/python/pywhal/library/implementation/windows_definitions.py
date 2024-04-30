@@ -1,7 +1,7 @@
 import ctypes
 import ctypes.wintypes
-from typing import Union
-from .implementation.process_handle_impl import ProcessHandle
+from typing import Type, TypeAlias, Union
+from .process_handle_impl import ProcessHandle
 from .safe_handle import SafeHandle
 
 
@@ -17,8 +17,6 @@ MAX_PATH = 260
 MAX_LONG_PATH_LENGTH = 32767
 
 TH32CS_SNAPPROCESS = 0x00000002
-TH32CS_SNAPMODULE = 0x00000008
-TH32CS_SNAPMODULE32 = 0x00000010
 
 SYNCHRONIZE = 0x00100000
 STANDARD_RIGHTS_REQUIRED = 0x000F0000
@@ -261,6 +259,147 @@ PIMAGE_EXPORT_DIRECTORY = ctypes.POINTER(IMAGE_EXPORT_DIRECTORY)
 FARPROC = ctypes.WINFUNCTYPE(ctypes.c_size_t)
 LPTHREAD_START_ROUTINE = ctypes.WINFUNCTYPE(ctypes.wintypes.DWORD, ctypes.wintypes.LPVOID)
 
+ULONG_PTR: TypeAlias = ctypes.c_size_t
+PVOID64: TypeAlias = ctypes.c_uint64
+
+
+############################
+# <winternl.h> Definitions #
+############################
+
+NTSTATUS: TypeAlias = ctypes.wintypes.DWORD
+
+
+def generate_winternl_structures(pointer_size: int) -> Type:
+    """
+    Generates <winternl.h> definitions for the given pointer size,
+    and returns a class containing ctypes definitions of them.
+
+    Args:
+        pointer_size (int): 4 (32 bit) or 8 (64 bit)
+    """
+    if pointer_size == 4:
+        PTR: TypeAlias = ctypes.c_uint32
+    elif pointer_size == 8:
+        PTR: TypeAlias = ctypes.c_uint64
+    else:
+        raise ValueError(f'pointer_size must be 4 or 8 (was {pointer_size})')\
+    
+    PWSTR: TypeAlias = PTR
+    ULONG_PTR: TypeAlias = PTR
+
+    class UNICODE_STRING(ctypes.Structure):
+        _fields_ = [
+            ('Length', ctypes.wintypes.USHORT),
+            ('MaximumLength', ctypes.wintypes.USHORT),
+            ('Buffer', PWSTR)
+        ]
+
+
+    class LIST_ENTRY(ctypes.Structure):
+        pass
+
+    PLIST_ENTRY: TypeAlias = PTR
+
+    LIST_ENTRY._fields_ = [
+        ('Flink', PLIST_ENTRY),
+        ('Blink', PLIST_ENTRY),
+    ]
+
+
+    class LDR_DATA_TABLE_ENTRY(ctypes.Structure):
+        _fields_ = [
+            ('Reserved1', PTR * 2),
+            ('InMemoryOrderLinks', LIST_ENTRY),
+            ('Reserved2', PTR * 2),
+            ('DllBase', PTR),
+            ('EntryPoint', PTR),
+            ('Reserved3', PTR),
+            ('FullDllName', UNICODE_STRING),
+            ('Reserved4', ctypes.wintypes.BYTE * 8),
+            ('Reserved5', PTR * 3),
+            ('CheckSum_or_Reserved6', PTR),
+            ('TimeDateStamp', ctypes.wintypes.ULONG)
+        ]
+
+
+
+    class PEB_LDR_DATA(ctypes.Structure):
+        _fields_ = [
+            ('Reserved1', ctypes.wintypes.BYTE * 8),
+            ('Reserved2', PTR * 3),
+            ('InMemoryOrderModuleList', LIST_ENTRY)
+        ]
+
+    PPEB_LDR_DATA: TypeAlias = PTR
+
+    class RTL_USER_PROCESS_PARAMETERS(ctypes.Structure):
+        _fields_ = [
+            ('Reserved1', ctypes.wintypes.BYTE * 16),
+            ('Reserved2', PTR * 10),
+            ('ImagePathName', UNICODE_STRING),
+            ('CommandLine', UNICODE_STRING),
+        ]
+
+    PRTL_USER_PROCESS_PARAMETERS: TypeAlias = PTR
+
+
+    class PEB(ctypes.Structure):
+        _fields_ = [
+            ('Reserved1', ctypes.wintypes.BYTE * 2),
+            ('BeingDebugged', ctypes.wintypes.BYTE),
+            ('Reserved2', ctypes.wintypes.BYTE * 1),
+            ('Reserved3', PTR * 2),
+            ('Ldr', PPEB_LDR_DATA),
+            ('ProcessParameters', PRTL_USER_PROCESS_PARAMETERS),
+            ('Reserved4', PTR * 3),
+            ('AtlThunkSListPtr', PTR),
+            ('Reserved5', PTR),
+            ('Reserved6', ctypes.wintypes.ULONG),
+            ('Reserved7', PTR),
+            ('Reserved8', ctypes.wintypes.ULONG),
+            ('AtlThunkSListPtr32', ctypes.wintypes.ULONG),
+            ('Reserved9', PTR * 45),
+            ('Reserved10', ctypes.wintypes.BYTE * 96),
+            ('PostProcessInitRoutine', PTR),
+            ('Reserved11', ctypes.wintypes.BYTE * 128),
+            ('Reserved12', PTR * 1),
+            ('SessionId', ctypes.wintypes.ULONG)
+        ]
+
+    PPEB: TypeAlias = PTR
+
+    KPRIORITY: TypeAlias = ctypes.wintypes.LONG
+
+    class PROCESS_BASIC_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ('ExitStatus', NTSTATUS),
+            ('PebBaseAddress', PPEB),
+            ('AffinityMask', ULONG_PTR),
+            ('BasePriority', KPRIORITY),
+            ('UniqueProcessId', ULONG_PTR),
+            ('InheritedFromUniqueProcessId', ULONG_PTR)
+        ]
+    
+    definitions = locals()
+    definitions.pop('pointer_size')
+    
+    class_name = f'winternl{pointer_size * 8}'
+    return type(class_name, (object,), definitions)
+
+
+winternl32 = generate_winternl_structures(4)
+winternl64 = generate_winternl_structures(8)
+
+
+PROCESSINFOCLASS: TypeAlias = ctypes.wintypes.DWORD
+
+ProcessBasicInformation: PROCESSINFOCLASS = 0
+ProcessDebugPort: PROCESSINFOCLASS = 7
+ProcessWow64Information: PROCESSINFOCLASS = 26
+ProcessImageFileName: PROCESSINFOCLASS = 27
+ProcessBreakOnTermination: PROCESSINFOCLASS = 2
+
 
 #############
 # Functions #
@@ -333,14 +472,6 @@ CreateToolhelp32Snapshot = ctypes.windll.kernel32.CreateToolhelp32Snapshot
 CreateToolhelp32Snapshot.restype = ctypes.wintypes.HANDLE
 CreateToolhelp32Snapshot.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.DWORD]
 
-Module32First = ctypes.windll.kernel32.Module32First
-Module32First.restype = ctypes.wintypes.BOOL
-Module32First.argtypes = [ctypes.wintypes.HANDLE, LPMODULEENTRY32]
-
-Module32Next = ctypes.windll.kernel32.Module32Next
-Module32Next.restype = ctypes.wintypes.BOOL
-Module32Next.argtypes = [ctypes.wintypes.HANDLE, LPMODULEENTRY32]
-
 Process32First = ctypes.windll.kernel32.Process32First
 Process32First.restype = ctypes.wintypes.BOOL
 Process32First.argtypes = [ctypes.wintypes.HANDLE, LPPROCESSENTRY32]
@@ -377,6 +508,17 @@ GetExitCodeThread = ctypes.windll.kernel32.GetExitCodeThread
 GetExitCodeThread.restype = ctypes.wintypes.BOOL
 GetExitCodeThread.argtypes = [ctypes.wintypes.HANDLE, ctypes.wintypes.PDWORD]
 
+NtQueryInformationProcess = ctypes.windll.ntdll.NtQueryInformationProcess
+NtQueryInformationProcess.restype = NTSTATUS
+NtQueryInformationProcess.argtypes = [ctypes.wintypes.HANDLE, PROCESSINFOCLASS, ctypes.wintypes.LPVOID, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG]
+
+PfnNtWow64QueryInformationProcess64 = ctypes.WINFUNCTYPE(NTSTATUS, ctypes.wintypes.HANDLE, PROCESSINFOCLASS, ctypes.wintypes.LPVOID,
+                                                         ctypes.wintypes.ULONG, ctypes.wintypes.PULONG)
+NtWow64QueryInformationProcess64 = None  # Initialized in `process_modules_impl.query_process_basic_information``
+
+PfnNtWow64ReadVirtualMemory64 = ctypes.WINFUNCTYPE(NTSTATUS, ctypes.wintypes.HANDLE, PVOID64, ctypes.wintypes.LPVOID,
+                                                   ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint64))
+NtWow64ReadVirtualMemory64 = None  # Initialized in `process_memory_impl.read_memory``
 
 #############
 # Variables #

@@ -1,7 +1,7 @@
 from typing import Union
+from .implementation import process_memory_impl
 from .memory_block import MemoryBlock
 from .process import Process, CurrentProcess
-from .._internal.implementation import process_memory_impl
 
 
 class ProcessMemory:

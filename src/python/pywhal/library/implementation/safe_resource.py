@@ -21,13 +21,13 @@ class SafeResource:
         self.resource = resource
         self.deleter = deleter
     
-    def detach(self):
+    def detach(self) -> None:
         """
         The managed resource won't be released when the object is destroyed.
         """
         self.deleter = None
 
-    def release(self):
+    def release(self) -> None:
         if self.deleter is not None:
             if isinstance(self.resource, Sequence):
                 self.deleter(*self.resource)

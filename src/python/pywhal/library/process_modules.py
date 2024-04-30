@@ -1,9 +1,9 @@
 import ctypes.wintypes
 from typing import Generator, Union
-from .process import Process, CurrentProcess
+from .implementation import process_modules_impl
+from .implementation.process_memory_impl import PROCESS_MEMORY_ACCESS_RIGHTS
 from .module import Module
-from .._internal.implementation import process_modules_impl
-from .._internal.implementation.process_memory_impl import PROCESS_MEMORY_ACCESS_RIGHTS
+from .process import Process, CurrentProcess
 
 
 class ProcessModules:

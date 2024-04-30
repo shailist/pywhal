@@ -1,7 +1,7 @@
 from typing import Generator, Union
+from .implementation import processes_impl
+from .implementation.windows_definitions import PROCESS_QUERY_INFORMATION
 from .process import Process
-from .._internal.implementation import processes_impl
-from .._internal.windows_definitions import PROCESS_QUERY_INFORMATION
 
 
 class ProcessesMeta(type):

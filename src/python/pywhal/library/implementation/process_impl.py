@@ -1,7 +1,7 @@
 from typing import Optional
 from .process_handle_impl import ProcessHandle
-from ..safe_resource import SafeResource
-from ..windows_definitions import *
+from .safe_resource import SafeResource
+from .windows_definitions import *
 
 
 class ProcessBase(SafeResource):
@@ -47,7 +47,7 @@ def open_process(pid: int, desired_access: int) -> ProcessHandle:
 def get_process_image_path(process: ProcessBase) -> str:
     from .process_modules_impl import Module, SafeModuleHandle
     
-    executable_module = Module(process, SafeModuleHandle(ctypes.wintypes.HMODULE(None)))
+    executable_module = Module(process, SafeModuleHandle(0))
     return executable_module.path
 
 

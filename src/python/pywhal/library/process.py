@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import os
 from typing import Optional
-from .._internal.implementation import process_impl
-from .._internal.implementation.process_handle_impl import ProcessHandle
-from .._internal.windows_definitions import CurrentProcessId, CurrentProcessHandle, PROCESS_QUERY_INFORMATION, PROCESS_ALL_ACCESS
+from .implementation import process_impl
+from .implementation.process_handle_impl import ProcessHandle
+from .implementation.windows_definitions import CurrentProcessId, CurrentProcessHandle, PROCESS_QUERY_INFORMATION, PROCESS_ALL_ACCESS
 
 
 class Process(process_impl.ProcessBase):
@@ -47,7 +49,7 @@ class Process(process_impl.ProcessBase):
         
         return self._is_current_process
 
-    def with_access(self, desired_access: int):
+    def with_access(self, desired_access: int) -> Process:
         if (self._desired_access & desired_access) == desired_access:
             return self
         

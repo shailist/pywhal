@@ -1,7 +1,7 @@
 #pragma once
 
-#include <pybind11/pybind11.h>
 #include "../detours.hpp"
+#include <pybind11/pybind11.h>
 
 namespace pywhal::bindings::hooks
 {

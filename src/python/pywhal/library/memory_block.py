@@ -1,5 +1,5 @@
 from typing import Callable, Optional
-from .._internal.safe_resource import SafeResource
+from .implementation.safe_resource import SafeResource
 
 
 class MemoryBlock(SafeResource):
@@ -7,9 +7,9 @@ class MemoryBlock(SafeResource):
         super().__init__((address, size), deallocator)
     
     @property
-    def address(self):
+    def address(self) -> int:
         return self.resource[0]
     
     @property
-    def size(self):
+    def size(self) -> int:
         return self.resource[1]

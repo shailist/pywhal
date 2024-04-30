@@ -1,6 +1,6 @@
 import ctypes.wintypes
 from typing import Optional
-from ..safe_handle import SafeHandle
+from .safe_handle import SafeHandle
 
 
 class ProcessHandle(SafeHandle):
@@ -10,23 +10,23 @@ class ProcessHandle(SafeHandle):
         self._is_current_process = None
     
     @property
-    def pid(self):
+    def pid(self) -> int:
         if self._pid is None:
             self._pid = get_process_pid(self.handle)
         
         return self._pid
     
     @property
-    def is_current_process(self):
+    def is_current_process(self) -> bool:
         if self._is_current_process is None:
-            from ..windows_definitions import CurrentProcessId
+            from .windows_definitions import CurrentProcessId
             self._is_current_process = (self.pid == CurrentProcessId)
         
         return self._is_current_process
 
 
 def get_process_pid(process_handle: ProcessHandle) -> int:
-    from ..windows_definitions import GetProcessId
+    from .windows_definitions import GetProcessId
     
     pid = GetProcessId(process_handle.handle)
     if not pid:

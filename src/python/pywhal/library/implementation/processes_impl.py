@@ -1,8 +1,8 @@
 import ctypes
 from encodings import utf_8
 from typing import Generator
-from ..windows_definitions import *
-from ...library.process import Process
+from .windows_definitions import *
+from ..process import Process
 
 
 def iterate_processes() -> Generator[Process, None, None]:

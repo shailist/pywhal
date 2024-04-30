@@ -2,17 +2,17 @@ import os
 from encodings import utf_8
 from typing import Dict, Optional, Union
 from .process import Process
-from .._internal.implementation import module_impl
-from .._internal.implementation.process_memory_impl import PROCESS_MEMORY_ACCESS_RIGHTS
-from .._internal.safe_module_handle import SafeModuleHandle
-from .._internal.safe_resource import SafeResource
-from .._internal.windows_definitions import IMAGE_NT_HEADERS_ANY
+from .implementation import module_impl
+from .implementation.process_memory_impl import PROCESS_MEMORY_ACCESS_RIGHTS
+from .implementation.safe_module_handle import SafeModuleHandle
+from .implementation.safe_resource import SafeResource
+from .implementation.windows_definitions import IMAGE_NT_HEADERS_ANY
 
 
 class Module(SafeResource):
     def __init__(self, process: Process, module_handle: SafeModuleHandle,
                  module_path: Optional[str] = None, module_name: Optional[str] = None):
-        from .._internal.implementation.process_modules_impl import unload_module
+        from .implementation.process_modules_impl import unload_module
         super().__init__((process.with_access(PROCESS_MEMORY_ACCESS_RIGHTS), module_handle),
                          unload_module if module_handle.is_managed else None)
         self._module_path = module_path

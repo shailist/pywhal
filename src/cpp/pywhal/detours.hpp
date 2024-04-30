@@ -36,6 +36,8 @@ namespace pywhal::detours
 // Implementation //
 ////////////////////
 
+#include <bit>
+#include <system_error>
 #include <Windows.h>
 #include <detours.h>
 

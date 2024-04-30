@@ -1,10 +1,5 @@
-#include <bit>
-#include <list>
-#include <pybind11/pybind11.h>
-#include <Windows.h>
-#include <detours.h>
-
 #include "pywhal/bindings/hooks.hpp"
+#include "pywhal/bindings/memory.hpp"
 
 namespace py = pybind11;
 
@@ -21,4 +16,5 @@ PYBIND11_MODULE(_pywhalCore, m)
     )pbdoc";
 
     pywhal::bindings::hooks::register_submodule(m);
+    pywhal::bindings::memory::register_submodule(m);
 }

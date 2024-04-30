@@ -25,3 +25,12 @@
 [rtd-link]:                 https://pywhal.readthedocs.io/en/latest/?badge=latest
 
 <!-- prettier-ignore-end -->
+
+## Building on 32 bit
+
+You'll need OpenSSL 1.1.1.2100 for the buildsystem to function.  
+On 64 bit it isn't an issue and just works, on 32 bit you need to install it manually.  
+I recommend using Chocolatey and running:
+```bash
+choco install openssl --version 1.1.1.2100 --x86
+```

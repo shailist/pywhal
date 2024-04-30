@@ -3,9 +3,9 @@ import ctypes.wintypes
 from encodings import utf_8
 from typing import Dict, Tuple, Union
 from . import process_memory_impl
-from ..safe_module_handle import SafeModuleHandle
-from ..windows_definitions import *
-from ...library.process import Process
+from .safe_module_handle import SafeModuleHandle
+from .windows_definitions import *
+from ..process import Process
 
 
 def get_module_name(process: Process, module_handle: SafeModuleHandle) -> bytes:
